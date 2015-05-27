@@ -1,0 +1,22 @@
+{
+  "name": "w2ui",
+  "version": "1.0.0",
+  "authors": [
+    "Adrian A. <a.adrian.tech@googlemail.com>"
+  ],
+  "description": "W2UI Grails example web resources",
+  "main": "application.js",
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "jquery": "1.11.1",
+    "w2ui": "~1.4.2"
+  }
+}
