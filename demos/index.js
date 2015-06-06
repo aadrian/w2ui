@@ -83,6 +83,7 @@ $(function () {
                     { id: 'grid-24', text: 'Lock/Unlock Grid', icon: 'fa-table' },
                     { id: 'grid-25', text: 'Re-Order Columns', icon: 'fa-table' },
                     { id: 'grid-26', text: 'Re-Order Records', icon: 'fa-table' },
+                    { id: 'grid-27', text: 'Inline Editing Advanced', icon: 'fa-table' }
                     //{ id: 'grid-27', text: 'Locked Columns', icon: 'fa-table' }
                 ]
             },

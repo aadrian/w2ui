@@ -2213,8 +2213,8 @@
             if (edit == null || edit === true) edit = (col ? col.editable : null);
             if (!rec || !col || !edit || rec.editable === false) return;
             
-            if (['enum', 'file'].indexOf(edit.type) != -1) {
-                console.log('ERROR: input types "enum" and "file" are not supported in inline editing.');
+            if (['file'].indexOf(edit.type) != -1) {
+                console.log('ERROR: input type "file" is not supported in inline editing.');
                 return;
             }
             // event before

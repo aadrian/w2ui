@@ -1980,6 +1980,9 @@ w2utils.event = {
         - load more only on the right side
         - scrolling on frozen columns is not working only on regular columns
 *   - copy or large number of records is slow
+*   - resize row (height)
+*   - reusable search component (see https://github.com/vitmalina/w2ui/issues/914#issuecomment-107340524)
+*   - allow enum in inline edit (see https://github.com/vitmalina/w2ui/issues/911#issuecomment-107341193)
 *
 * == 1.5 changes
 *   - $('#grid').w2grid() - if called w/o argument then it returns grid object
@@ -2016,6 +2019,7 @@ w2utils.event = {
 *   - removed onSubmit and onDeleted - now it uses onSave and onDelete
 *   - added record.w2ui.softspan
 *   - added refreshSpans
+*   - column.seachable - can be an object, which will create search
 *
 ************************************************************************/
 
@@ -2201,11 +2205,15 @@ w2utils.event = {
             // add searches
             for (var i = 0; i < object.columns.length; i++) {
                 var col = object.columns[i];
-                if (col.searchable == null || col.searchable === false || object.getSearch(col.field) != null) continue;
-                var stype = col.searchable;
-                var attr  = '';
-                if (col.searchable === true) { stype = 'text'; attr = 'size="20"'; }
-                object.addSearch({ field: col.field, caption: col.caption, type: stype, attr: attr });
+                var search = col.searchable;
+                if (search == null || search === false || object.getSearch(col.field) != null) continue;
+                if ($.isPlainObject(search)) {
+                    object.addSearch($.extend({ field: col.field, caption: col.caption, type: 'text' }, search));    
+                } else {
+                    var stype = col.searchable, attr  = '';
+                    if (col.searchable === true) { stype = 'text'; attr = 'size="20"'; }
+                    object.addSearch({ field: col.field, caption: col.caption, type: stype, attr: attr });
+                }
             }
             // init toolbar
             object.initToolbar();
@@ -3413,9 +3421,9 @@ w2utils.event = {
                 // advanced search
                 for (var i = 0; i < this.searches.length; i++) {
                     var search   = this.searches[i];
-                    var operator = $('#grid_'+ this.name + '_operator_'+ s).val();
-                    var field1   = $('#grid_'+ this.name + '_field_'+ s);
-                    var field2   = $('#grid_'+ this.name + '_field2_'+ s);
+                    var operator = $('#grid_'+ this.name + '_operator_'+ i).val();
+                    var field1   = $('#grid_'+ this.name + '_field_'+ i);
+                    var field2   = $('#grid_'+ this.name + '_field2_'+ i);
                     var value1   = field1.val();
                     var value2   = field2.val();
                     var svalue   = null;
@@ -3652,20 +3660,19 @@ w2utils.event = {
             if (this.searches.length == 0) return;
             var obj = this;
             // show search
-            $('#tb_'+ this.name +'_toolbar_item_w2ui-search-advanced').w2overlay(
-                this.getSearchesHTML(),    {
-                    name    : 'searches-'+ this.name,
-                    left    : -10,
-                    'class' : 'w2ui-grid-searches',
-                    onShow  : function () {
-                        if (obj.last.logic == 'OR') obj.searchData = [];
-                        obj.initSearches();
-                        $('#w2ui-overlay-searches-'+ this.name +' .w2ui-grid-searches').data('grid-name', obj.name);
-                        var sfields = $('#w2ui-overlay-searches-'+ this.name +' .w2ui-grid-searches *[rel=search]');
-                        if (sfields.length > 0) sfields[0].focus();
-                    }
+            $('#tb_'+ this.name +'_toolbar_item_w2ui-search-advanced').w2overlay({
+                html    : this.getSearchesHTML(),
+                name    : this.name + '-searchOverlay',
+                left    : -10,
+                'class' : 'w2ui-grid-searches',
+                onShow  : function () {
+                    if (obj.last.logic == 'OR') obj.searchData = [];
+                    obj.initSearches();
+                    $('#w2ui-overlay-'+ obj.name +'-searchOverlay .w2ui-grid-searches').data('grid-name', obj.name);
+                    var sfields = $('#w2ui-overlay-'+ this.name +'-searchOverlay .w2ui-grid-searches *[rel=search]');
+                    if (sfields.length > 0) sfields[0].focus();
                 }
-            );
+            });
         },
 
         searchClose: function () {
@@ -3673,9 +3680,8 @@ w2utils.event = {
             if (this.searches.length == 0) return;
             if (this.toolbar) this.toolbar.uncheck('w2ui-search-advanced');
             // hide search
-            if ($('#w2ui-overlay-searches-'+ this.name +' .w2ui-grid-searches').length > 0) {
-                $().w2overlay('', { name: 'searches-'+ this.name });
-            }
+            $().w2overlay({ name: this.name + '-searchOverlay' });
+            $().w2overlay({ name: this.name + '-searchOverlay' }); // need to call twice as first ignored after click
         },
 
         searchReset: function (noRefresh) {
@@ -3713,6 +3719,7 @@ w2utils.event = {
         },
 
         searchShowFields: function () {
+            var obj  = this;
             var el   = $('#grid_'+ this.name +'_search_all');
             var html = '<div class="w2ui-select-field"><table>';
             for (var s = -1; s < this.searches.length; s++) {
@@ -3723,7 +3730,8 @@ w2utils.event = {
                 } else {
                     if (this.searches[s].hidden === true) continue;
                 }
-                html += '<tr '+ (w2utils.isIOS ? 'onTouchStart' : 'onClick') +'="w2ui[\''+ this.name +'\'].initAllField(\''+ search.field +'\')">'+
+                html += '<tr '+ (w2utils.isIOS ? 'onTouchStart' : 'onClick') +'="w2ui[\''+ this.name +'\'].initAllField(\''+ search.field +'\');'+
+                        '      event.stopPropagation(); $(\'#grid_'+ this.name +'_search_all\').w2overlay({ name: \''+ this.name +'-searchFields\' });">'+
                         '    <td><input type="radio" tabIndex="-1" '+ (search.field == this.last.field ? 'checked' : '') +'></td>'+
                         '    <td>'+ search.caption +'</td>'+
                         '</tr>';
@@ -3731,7 +3739,7 @@ w2utils.event = {
             html += "</table></div>";
             // need timer otherwise does nto show with list type
             setTimeout(function () {
-                $(el).w2overlay(html, { left: -10 });
+                $(el).w2overlay({ html: html, name: obj.name + '-searchFields', left: -10 });
             }, 1);
         },
 
@@ -3767,7 +3775,7 @@ w2utils.event = {
                 this.last.caption = search.caption;
             }
             el.attr('placeholder', search.caption);
-            $().w2overlay();
+            $().w2overlay({ name: this.name + '-searchFields' });
         },
 
         // clears records and related params
@@ -4098,11 +4106,13 @@ w2utils.event = {
                 var record = this.get(changes[c].recid);
                 for (var s in changes[c]) {
                     if (s == 'recid') continue; // do not allow to change recid
-                    var key = "." + s;
-                    if (w2utils.isFloat(s)) key = "['" + s + "']";
-                    if (String(s).indexOf("'") != -1) key = "['" + s.replace(/'/g, "\\'") + "']";
+                    if (typeof changes[c][s] === "object") changes[c][s] = changes[c][s].text;
                     try { 
-                        eval('record' + key + ' = changes[c][s]'); 
+			if (s.indexOf('.') != -1) {
+				eval("record['" + s.replace(/\./g, "']['") + "'] = changes[c][s]")
+			} else {
+				record[s] = changes[c][s];
+			};
                     } catch (e) {
                         console.log('ERROR: Cannot merge. ', e.message || '', e);
                     }
@@ -4150,8 +4160,8 @@ w2utils.event = {
             if (edit == null || edit === true) edit = (col ? col.editable : null);
             if (!rec || !col || !edit || rec.editable === false) return;
             
-            if (['enum', 'file'].indexOf(edit.type) != -1) {
-                console.log('ERROR: input types "enum" and "file" are not supported in inline editing.');
+            if (['file'].indexOf(edit.type) != -1) {
+                console.log('ERROR: input type "file" is not supported in inline editing.');
                 return;
             }
             // event before
@@ -4835,7 +4845,10 @@ w2utils.event = {
                     break;
 
                 case 37: // left
-                    if (empty) break;
+                    if (empty) {
+                        selectTopRecord();
+                        break;
+                    }
                     // check if this is subgrid
                     var parent = $('#grid_'+ this.name +'_rec_'+ w2utils.escapeId(obj.records[ind].recid)).parents('tr');
                     if (parent.length > 0 && String(parent.attr('id')).indexOf('expanded_row') != -1) {
@@ -4898,7 +4911,10 @@ w2utils.event = {
                     break;
 
                 case 39: // right
-                    if (empty) break;
+                    if (empty) {
+                        selectTopRecord();
+                        break;
+                    }
                     if (this.selectType == 'row') {
                         if (recEL.length <= 0 || rec.expanded === true || obj.show.expandColumn !== true) break;
                         obj.expand(recid, event);
@@ -4993,7 +5009,7 @@ w2utils.event = {
                                 }
                             }
                         } else { // move selected record
-                            obj.selectNone();
+                            if (sel.length > 300) this.selectNone(); else this.unselect.apply(this, sel);
                             obj.click({ recid: obj.records[prev].recid, column: columns[0] }, event);
                         }
                         obj.scrollIntoView(prev);
@@ -5068,7 +5084,7 @@ w2utils.event = {
                                 }
                             }
                         } else { // move selected record
-                            obj.selectNone();
+                            if (sel.length > 300) this.selectNone(); else this.unselect.apply(this, sel);
                             obj.click({ recid: obj.records[next].recid, column: columns[0] }, event);
                         }
                         obj.scrollIntoView(next);
@@ -6518,7 +6534,7 @@ w2utils.event = {
             }
             if (hide) {
                 setTimeout(function () {
-                    $().w2overlay('', { name: 'searches-'+ this.name });
+                    $().w2overlay({ name: this.name + '-searchOverlay' });
                     obj.toolbar.uncheck('column-on-off');
                 }, 100);
             }
@@ -6632,7 +6648,7 @@ w2utils.event = {
                                 obj.searchOpen();
                                 event.originalEvent.stopPropagation();
                                 function tmp_close() {
-                                    if ($('#w2ui-overlay-searches-'+ obj.name).data('keepOpen') === true) return;
+                                    if ($('#w2ui-overlay-'+ obj.name + '-searchOverlay').data('keepOpen') === true) return;
                                     tb.uncheck(id);
                                     $(document).off('click', 'body', tmp_close);
                                 }
@@ -7095,7 +7111,7 @@ w2utils.event = {
         },
 
         getSearchesHTML: function () {
-            var html = '<table cellspacing="0">';
+            var html = '<table cellspacing="0" onclick="event.stopPropagation()">';
             var showBtn = false;
             for (var i = 0; i < this.searches.length; i++) {
                 var s = this.searches[i];
@@ -7103,7 +7119,7 @@ w2utils.event = {
                 if (s.hidden) continue;
                 var btn = '';
                 if (showBtn == false) {
-                    btn = '<button class="w2ui-btn close-btn" onclick="obj = w2ui[\''+ this.name +'\']; if (obj) { obj.searchClose(); }">X</button';
+                    btn = '<button class="w2ui-btn close-btn" onclick="obj = w2ui[\''+ this.name +'\']; if (obj) obj.searchClose()">X</button>';
                     showBtn = true;
                 }
                 if (typeof s.inTag   == 'undefined') s.inTag  = '';
@@ -7140,7 +7156,7 @@ w2utils.event = {
                 }
                 html += '<tr>'+
                         '    <td class="close-btn">'+ btn +'</td>' +
-                        '    <td class="caption">'+ s.caption +'</td>' +
+                        '    <td class="caption">'+ (s.caption || '') +'</td>' +
                         '    <td class="operator">'+ operator +'</td>'+
                         '    <td class="value">';
 
@@ -7301,10 +7317,10 @@ w2utils.event = {
                 }
             }
             // add on change event
-            $('#w2ui-overlay-searches-'+ this.name +' .w2ui-grid-searches *[rel=search]').on('keypress', function (evnt) {
+            $('#w2ui-overlay-'+ this.name +'-searchOverlay .w2ui-grid-searches *[rel=search]').on('keypress', function (evnt) {
                 if (evnt.keyCode == 13) {
                     obj.search();
-                    $().w2overlay();
+                    $().w2overlay({ name: obj.name + '-searchOverlay' });
                 }
             });
         },
@@ -10918,7 +10934,7 @@ var w2confirm = function (msg, title, callBack) {
 *   - tooltipShow(), tooltipHide() methods
 *   - added button types: color, text-color
 *   - added button types: menu-check, menu-radio - will save into item.selected
-*   - item.text and item.html - can be functions now (or string)
+*   - item.text and item.html - can be functions now (or string), where this keyword is the item
 *
 ************************************************************************/
 
@@ -11598,6 +11614,7 @@ var w2confirm = function (msg, title, callBack) {
 *   - added focus(), blur(), onFocus, onBlur
 *   - unselect w/o arguments will unselect selected node
 *   - added hasFocus property
+*   - nd.render deprecated, nd.text can be a function (where this word is the item)
 *
 ************************************************************************/
 
@@ -12197,11 +12214,8 @@ var w2confirm = function (msg, title, callBack) {
             var body   = $(this.box).find('.w2ui-sidebar-div');
             var item   = $(this.box).find('#node_'+ w2utils.escapeId(id));
             var offset = item.offset().top - body.offset().top;
-            if (offset + item.height() > body.height()) {
-                body.animate({ 'scrollTop': body.scrollTop() + body.height() / 1.3 }, 250, 'linear');
-            }
-            if (offset <= 0) {
-                body.animate({ 'scrollTop': body.scrollTop() - body.height() / 1.3 }, 250, 'linear');
+            if (offset + item.height() > body.height() || offset <= 0) {
+                body.animate({ 'scrollTop': body.scrollTop() + offset - body.height() / 2 + item.height() }, 250, 'linear');
             }
         },
 
@@ -12315,11 +12329,14 @@ var w2confirm = function (msg, title, callBack) {
                         w2ui[obj.name].keydown.call(w2ui[obj.name], event);
                     } 
                 });
-            $(this.box).off('mousedown').on('mousedown', function () {
+            $(this.box).off('mousedown').on('mousedown', function (event) {
                 // set focus to grid
                 setTimeout(function () {
-                    var $input = $(obj.box).find('#sidebar_'+ obj.name + '_focus');
-                    if (!$input.is(':focus')) $input.focus();
+                    // if input then do not focus
+                    if (['INPUT', 'TEXTAREA', 'SELECT'].indexOf(event.target.tagName) == -1) {
+                        var $input = $(obj.box).find('#sidebar_'+ obj.name + '_focus');
+                        if (!$input.is(':focus')) $input.focus();
+                    }
                 }, 1);
             });
             // event after
@@ -12406,21 +12423,15 @@ var w2confirm = function (msg, title, callBack) {
                     tmp = tmp.parent;
                     level++;
                 }
-                if (typeof nd.caption != 'undefined') nd.text = nd.caption;
+                if (nd.caption != null) nd.text = nd.caption;
                 if (nd.group) {
                     html =
                         '<div class="w2ui-node-group" id="node_'+ nd.id +'"'+
                         '        onclick="w2ui[\''+ obj.name +'\'].toggle(\''+ nd.id +'\')"'+
                         '        onmouseout="$(this).find(\'span:nth-child(1)\').css(\'color\', \'transparent\')" '+
                         '        onmouseover="$(this).find(\'span:nth-child(1)\').css(\'color\', \'inherit\')">'+
-                        (nd.groupShowHide ? '<span>'+ (!nd.hidden && nd.expanded ? w2utils.lang('Hide') : w2utils.lang('Show')) +'</span>' : '<span></span>');
-                    if (typeof(nd.render) != 'function') {
-                        html=html+'<span>'+ nd.text +'</span>';
-                    } else {
-                        nd.text=nd.render(nd);
-                        html=html+nd.text;
-                    }
-                    html=html+
+                        (nd.groupShowHide ? '<span>'+ (!nd.hidden && nd.expanded ? w2utils.lang('Hide') : w2utils.lang('Show')) +'</span>' : '<span></span>') +
+                        (typeof nd.text == 'function' ? nd.text.call(nd) : '<span>'+ nd.text +'</span>') +
                         '</div>'+
                         '<div class="w2ui-node-sub" id="node_'+ nd.id +'_sub" style="'+ nd.style +';'+ (!nd.hidden && nd.expanded ? '' : 'display: none;') +'"></div>';
                     if (obj.flat) {
@@ -12432,9 +12443,8 @@ var w2confirm = function (msg, title, callBack) {
                     tmp = '';
                     if (img) tmp  = '<div class="w2ui-node-image w2ui-icon '+ img +    (nd.selected && !nd.disabled ? " w2ui-icon-selected" : "") +'"></div>';
                     if (icon) tmp = '<div class="w2ui-node-image"><span class="'+ icon +'"></span></div>';
-                    if (typeof(nd.render) == 'function') {
-                        nd.text=nd.render(nd);
-                    }
+                    var text = nd.text;
+                    if (typeof nd.text == 'function') text = nd.text.call(nd);
                     html =  '<div class="w2ui-node '+ (nd.selected ? 'w2ui-selected' : '') +' '+ (nd.disabled ? 'w2ui-disabled' : '') +'" id="node_'+ nd.id +'" style="'+ (nd.hidden ? 'display: none;' : '') +'"'+
                             '    ondblclick="w2ui[\''+ obj.name +'\'].dblClick(\''+ nd.id +'\', event);"'+
                             '    oncontextmenu="w2ui[\''+ obj.name +'\'].contextMenu(\''+ nd.id +'\', event);"'+
@@ -12447,7 +12457,7 @@ var w2confirm = function (msg, title, callBack) {
                             '<td class="w2ui-node-data" nowrap>'+
                                     tmp +
                                     (nd.count || nd.count === 0 ? '<div class="w2ui-node-count">'+ nd.count +'</div>' : '') +
-                                    '<div class="w2ui-node-caption">'+ nd.text +'</div>'+
+                                    '<div class="w2ui-node-caption">'+ text +'</div>'+
                             '</td>'+
                             '</tr></table>'+
                             '</div>'+
@@ -12455,7 +12465,7 @@ var w2confirm = function (msg, title, callBack) {
                     if (obj.flat) {
                         html =  '<div class="w2ui-node '+ (nd.selected ? 'w2ui-selected' : '') +' '+ (nd.disabled ? 'w2ui-disabled' : '') +'" id="node_'+ nd.id +'" style="'+ (nd.hidden ? 'display: none;' : '') +'"'+
                                 '    onmouseover="$(this).find(\'.w2ui-node-data\').w2tag(w2utils.base64decode(\''+ 
-                                                w2utils.base64encode(nd.text + (nd.count || nd.count === 0 ? ' - <span class="w2ui-node-count">'+ nd.count +'</span>' : '')) + '\'), '+
+                                                w2utils.base64encode(text + (nd.count || nd.count === 0 ? ' - <span class="w2ui-node-count">'+ nd.count +'</span>' : '')) + '\'), '+
                                 '               { id: \'' + nd.id + '\', left: -5 })"'+
                                 '    onmouseout="$(this).find(\'.w2ui-node-data\').w2tag(null, { id: \'' + nd.id + '\' })"'+ 
                                 '    ondblclick="w2ui[\''+ obj.name +'\'].dblClick(\''+ nd.id +'\', event);"'+
